@@ -6,7 +6,7 @@ import ky from 'ky';
 import XMLParser from 'react-xml-parser';
 
 const ESEARCH_API =
-  'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=';
+  'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&field=title&term=';
 
 const ESUMMARY_API =
   'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=';
@@ -18,7 +18,7 @@ function App() {
   const [pubmedResult, setPubmedResult] = useState<{
     total: number;
     query: number;
-    idList: { id: string; title: string }[];
+    idList: { id: string; doi: string; title: string }[];
   }>({
     total: 0,
     query: 0,
@@ -37,7 +37,11 @@ function App() {
         const idListQuery = info
           .filter((it: any) => it.name === 'IdList')[0]
           .children.map((it: any) => {
-            return { id: it.value, title: 'Getting Title...' };
+            return {
+              id: it.value,
+              doi: 'GEtting DOI info...',
+              title: 'Getting Title...',
+            };
           });
         setPubmedResult(() => {
           return {
@@ -53,38 +57,86 @@ function App() {
           .text()
           .then((xml) => new XMLParser().parseFromString(xml))
           .then((ob) => ob.children[0].children)
-          .then((ob) =>
-            ob.map(
+          .then((ob) => {
+            const doiArr = ob.map(
+              (it: any) =>
+                it.children
+                  .filter((i: any) => i.attributes.Name === 'ArticleIds')[0]
+                  .children.filter((i: any) => i.attributes.Name === 'doi')[0]
+                  .value
+            );
+            const titleArr = ob.map(
               (it: any) =>
                 it.children.filter((i: any) => i.attributes.Name === 'Title')[0]
                   .value
-            )
-          )
-          .then((titleArr) => {
+            );
+            // console.log(doiArr);
             setPubmedResult((p) =>
               Object.assign({}, p, {
                 idList: p.idList.map((it, ind) => {
-                  return { id: it.id, title: titleArr[ind] };
+                  return { id: it.id, doi: doiArr[ind], title: titleArr[ind] };
                 }),
               })
             );
           });
       });
   };
-  const handleScihub = (id: string) => {
+  const handleScihub = (doi: string) => {
     // ky.post('https://sci-hub.yncjkj.com/',);
-    fetch('https://sci-hub.yncjkj.com/', {
+    // fetch(`https://sci-hub.yncjkj.com/${doi}`, {
+    //   headers: {
+    //     'content-type': 'application/x-www-form-urlencoded',
+    //   },
+    //   body: `sci-hub-plugin-check=&request=${encodeURIComponent(doi)}`,
+    //   method: 'POST',
+    //   mode: 'no-cors',
+    //   credentials: 'omit',
+    // })
+    fetch(`https://sci-hub.yncjkj.com/${doi}`, {
       headers: {
-        'content-type': 'application/x-www-form-urlencoded',
+        accept:
+          'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+        'accept-language':
+          'eo,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7,zh;q=0.6,ja-JP;q=0.5,ja;q=0.4',
+        'sec-fetch-dest': 'document',
+        'sec-fetch-mode': 'navigate',
+        'sec-fetch-site': 'none',
+        'sec-fetch-user': '?1',
+        'upgrade-insecure-requests': '1',
       },
-      body: `sci-hub-plugin-check=&request=${id}`,
-      method: 'POST',
+      referrer: 'https://sci-hub.mksa.top/',
+      referrerPolicy: 'strict-origin-when-cross-origin',
+      body: null,
+      method: 'GET',
       mode: 'no-cors',
       credentials: 'omit',
     })
-      .then((res) => res.json())
-      .then((json) => console.log(json));
+      // .then((res) => res.json())
+      .then((json) => json.text())
+      .then((text) => console.log(text));
   };
+  // fetch('https://sci-hub.yncjkj.com/10.1016/j.ijgo.2003.08.018', {
+  //   headers: {
+  //     accept:
+  //       'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+  //     'accept-language':
+  //       'eo,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7,zh;q=0.6,ja-JP;q=0.5,ja;q=0.4',
+  //     'sec-ch-ua':
+  //       '" Not A;Brand";v="99", "Chromium";v="98", "Google Chrome";v="98"',
+  //     'sec-ch-ua-mobile': '?0',
+  //     'sec-ch-ua-platform': '"Linux"',
+  //     'sec-fetch-dest': 'document',
+  //     'sec-fetch-mode': 'navigate',
+  //     'sec-fetch-site': 'none',
+  //     'sec-fetch-user': '?1',
+  //     'upgrade-insecure-requests': '1',
+  //   },
+  //   referrerPolicy: 'strict-origin-when-cross-origin',
+  //   body: null,
+  //   method: 'GET',
+  //   mode: 'cors',
+  //   credentials: 'omit',
+  // });
   return (
     <div className='App'>
       <header className='App-header'>
@@ -97,8 +149,8 @@ function App() {
         </div>
         {pubmedResult.idList.map((it, ind) => (
           <div key={ind}>
-            PMID:{it.id}:{it.title.slice(0, 30)}...{' '}
-            <button onClick={() => handleScihub(it.id)}>Download</button>
+            PMID:{it.id} DOI:{it.doi} Title:{it.title.slice(0, 20)}...{' '}
+            <button onClick={() => handleScihub(it.doi)}>Download</button>
           </div>
         ))}
       </header>
